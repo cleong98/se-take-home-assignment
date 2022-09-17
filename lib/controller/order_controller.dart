@@ -66,7 +66,7 @@ class OrderController extends ChangeNotifier {
     // create a send port to receive send port from isolate
     SendPort? sendPort;
 
-    // listen data from isoalte
+    // listen data from isolate
     receivePort.listen((value) {
       BasicOrder handleOrder = order;
 
@@ -158,7 +158,6 @@ void processOrder(SendPort sendPort) {
     if (value is bool) {
       forceExit = value;
     }
-    print("Background Isolate Receive Data -> 【$value]");
   });
   sendPort.send(receivePort.sendPort);
 
