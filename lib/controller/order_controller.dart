@@ -14,8 +14,8 @@ class OrderController extends ChangeNotifier {
   final List<BasicOrder> _queue = [];
   int _vipOrderTotal = 0;
   final List<BasicRobot> _robotList = [];
-  Timer? _timer;
   final int _handleTimes = 10;
+  final int _vipHandleTimes = 5;
 
   // add normal order
   void addNormalOrder() {
@@ -43,9 +43,12 @@ class OrderController extends ChangeNotifier {
 
   // delete robot
   void deleteMcdRobot(McdRobot robot) {
+    print(robot.timer == null);
     robotList.remove(robot);
     final order = robot.handleOrder;
     if (order != null) {
+      robot.timer?.cancel();
+      robot.timer = null;
       _resetOrder(order);
     }
     notifyListeners();
@@ -53,9 +56,8 @@ class OrderController extends ChangeNotifier {
 
   // handler order and create isolate to process concurrency
   Future<void> handleOrder(BasicOrder order, McdRobot robot) async {
-
     // setting handle time
-    int count = _handleTimes;
+    int count = robot.id % 2 == 0 ? _handleTimes : _vipHandleTimes;
 
     // setting robot handle order
     robot.updateStatus(true);
@@ -67,22 +69,24 @@ class OrderController extends ChangeNotifier {
     order.handleStatus = '$count s';
 
     // process
-    Timer.periodic(const Duration(seconds: 1), (timer) {
-      _timer ??= timer;
+
+    robot.timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       count--;
       order.handleStatus = '$count s';
 
       if (count == 0) {
         // completed order
         timer.cancel();
-        _timer = null;
+        robot.timer = null;
         order.handleStatus = 'complete';
         order.orderStatus = Status.complete;
         robot.updateStatus(false);
         robot.setHandleOrder(null);
+
       }
       notifyListeners();
     });
+
   }
 
   void _resetOrder(BasicOrder order) {
@@ -90,7 +94,6 @@ class OrderController extends ChangeNotifier {
     order.handleBy = null;
     order.inProcess = false;
     order.handleStatus = 'waiting robot handle';
-    _timer!.cancel();
   }
 
   // get first pending order which are haven't process by robot.
@@ -114,7 +117,10 @@ class OrderController extends ChangeNotifier {
 
   // get no busy robot
   BasicRobot? get notBusyRobot =>
-      _robotList.firstWhereOrNull((BasicRobot robot) => robot.isBusy == false);
+      _robotList.firstWhereOrNull((BasicRobot robot) {
+        robot as McdRobot;
+        return robot.isBusy == false && robot.handleOrder == null;
+      });
 
   // get the all order in queue status is pending
   List<BasicOrder> get pendingQueue => _queue
